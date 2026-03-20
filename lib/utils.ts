@@ -31,7 +31,7 @@ export function formatGameTime(dateString: string): string {
   const diff = gameDate.getTime() - now.getTime()
 
   if (diff <= 0) {
-    return '进行中'
+    return '即将开始'
   }
 
   const hours = Math.floor(diff / (1000 * 60 * 60))
@@ -42,7 +42,11 @@ export function formatGameTime(dateString: string): string {
     return `${days}天后`
   }
 
-  return `${hours}小时${minutes}分钟后`
+  if (hours > 0) {
+    return `${hours}小时${minutes}分钟后`
+  }
+
+  return `${minutes}分钟后`
 }
 
 /**

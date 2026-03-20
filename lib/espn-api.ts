@@ -1,4 +1,4 @@
-import type { Game, Team, EspnScoreboardResponse, EspnEvent, EspnCompetition } from '@/types'
+import type { Game, Team, EspnScoreboardResponse, EspnEvent, EspnCompetition, EspnOdds } from '@/types'
 
 const ESPN_BASE_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball'
 
@@ -28,6 +28,19 @@ export async function fetchScoreboard(date?: string): Promise<Game[]> {
 }
 
 /**
+ * 获取今日赛程（按时间排序）
+ */
+export async function fetchTodayGames(): Promise<Game[]> {
+  const today = new Date().toISOString().split('T')[0]
+  const games = await fetchScoreboard(today)
+  
+  // 按比赛时间排序
+  return games.sort((a, b) => 
+    new Date(a.tipoff).getTime() - new Date(b.tipoff).getTime()
+  )
+}
+
+/**
  * 解析 ESPN API 响应为我们的 Game 类型
  */
 function parseEspnEvents(events: EspnEvent[]): Game[] {
@@ -42,6 +55,17 @@ function parseEspnEvents(events: EspnEvent[]): Game[] {
       'post': 'final',
       'final': 'final',
     }
+
+    // 解析赔率
+    const odds = competition.odds?.[0]
+    const oddsInfo = odds ? {
+      spread: odds.details, // e.g., "ALA -12.5"
+      overUnder: odds.overUnder,
+      provider: odds.provider.name,
+    } : undefined
+
+    // 解析赛区信息
+    const region = competition.notes?.[0]?.headline?.match(/(\w+) Region/)?.[1]
 
     return {
       id: competition.id,
@@ -59,6 +83,9 @@ function parseEspnEvents(events: EspnEvent[]): Game[] {
       } : undefined,
       period: competition.status.period,
       clock: competition.status.displayClock,
+      odds: oddsInfo,
+      bracket: region ? { region, position: '' } : undefined,
+      gamecastUrl: event.links?.find(l => l.rel?.includes('summary'))?.href,
     }
   })
 }

@@ -30,6 +30,12 @@ export interface Game {
     region: string // "East", "West", "South", "Midwest"
     position: string
   }
+  odds?: {
+    spread: string // e.g., "ALA -12.5"
+    overUnder: number
+    provider: string
+  }
+  gamecastUrl?: string
 }
 
 // 比赛轮次
@@ -127,4 +133,28 @@ export interface EspnCompetitor {
     type: string
     summary: string
   }>
+}
+
+export interface EspnOdds {
+  provider: {
+    id: string
+    name: string
+  }
+  details: string
+  overUnder: number
+  spread: number
+  awayTeamOdds: {
+    favorite: boolean
+    team: {
+      id: string
+      abbreviation: string
+    }
+  }
+  homeTeamOdds: {
+    favorite: boolean
+    team: {
+      id: string
+      abbreviation: string
+    }
+  }
 }
