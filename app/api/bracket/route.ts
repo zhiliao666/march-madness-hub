@@ -10,46 +10,68 @@ export async function GET() {
     })
 
     if (!res.ok) {
-      throw new Error(`Bracket API error: ${res.status}`)
+      console.error(`Bracket API error: ${res.status}`)
+      // Return empty bracket data instead of 500
+      return NextResponse.json({
+        year,
+        regions: [],
+        rounds: [],
+        message: '锦标赛尚未开始或数据暂不可用'
+      })
     }
 
     const data = await res.json()
     return NextResponse.json(parseBracketData(data))
-  } catch (error) {
-    console.error('Bracket API error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch bracket data' },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    console.error('Bracket API error:', error?.message || error)
+    // Return empty bracket data instead of 500
+    return NextResponse.json({
+      year: new Date().getFullYear(),
+      regions: [],
+      rounds: [],
+      message: '数据加载失败，请稍后重试'
+    })
   }
 }
 
 function parseBracketData(data: any) {
+  if (!data) {
+    return {
+      year: new Date().getFullYear(),
+      regions: [],
+      rounds: [],
+    }
+  }
+
   const regions = data.tournament?.regions || []
+  const events = data.events || []
   
   return {
     year: data.season?.year || new Date().getFullYear(),
-    regions: regions.map((region: any) => ({
-      id: region.id,
-      name: region.name,
+    regions: (Array.isArray(regions) ? regions : []).map((region: any) => ({
+      id: region.id || '',
+      name: region.name || 'Unknown',
       seed: 1,
-      teams: region.teams?.map((team: any) => ({
+      teams: (Array.isArray(region.teams) ? region.teams : []).map((team: any) => ({
         id: team.team?.id || '',
         name: team.team?.displayName || '',
-        seed: team.seed?.value || 0,
+        seed: parseInt(team.seed?.value || '0'),
         logo: team.team?.logo,
         record: team.team?.record?.summary,
         won: false,
         eliminated: false,
-      })) || [],
+      })),
     })),
-    rounds: parseRounds(data),
+    rounds: parseRounds(events),
   }
 }
 
-function parseRounds(data: any) {
+function parseRounds(events: any[]) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return []
+  }
+
   const rounds = []
-  const events = data.events || []
   
   // 按轮次分组
   const roundsMap = new Map<string, any[]>()
@@ -62,49 +84,63 @@ function parseRounds(data: any) {
   })
 
   roundsMap.forEach((games, roundName) => {
-    rounds.push({
-      name: roundName,
-      games: games.map((game: any) => {
-        const competition = game.competitions?.[0]
-        const homeComp = competition?.competitors?.find((c: any) => c.homeAway === 'home')
-        const awayComp = competition?.competitors?.find((c: any) => c.homeAway === 'away')
-        
-        return {
-          id: competition?.id || '',
-          round: 1,
-          region: competition?.notes?.[0]?.headline?.match(/(\w+) Region/)?.[1] || '',
-          homeTeam: homeComp ? {
-            id: homeComp.team?.id || '',
-            name: homeComp.team?.displayName || '',
-            seed: parseInt(homeComp.seed?.value || '0'),
-            logo: homeComp.team?.logo,
-          } : null,
-          awayTeam: awayComp ? {
-            id: awayComp.team?.id || '',
-            name: awayComp.team?.displayName || '',
-            seed: parseInt(awayComp.seed?.value || '0'),
-            logo: awayComp.team?.logo,
-          } : null,
-          winner: competition?.status?.type?.completed 
-            ? (parseInt(homeComp?.score || '0') > parseInt(awayComp?.score || '0') 
-                ? homeComp?.team?.id 
-                : awayComp?.team?.id)
-            : undefined,
-          game: {
-            id: competition?.id || '',
-            status: getGameStatus(competition?.status?.type?.state),
-            score: competition?.status?.type?.completed ? {
-              home: parseInt(homeComp?.score || '0'),
-              away: parseInt(awayComp?.score || '0'),
-            } : undefined,
-            tipoff: competition?.date || '',
-          },
-        }
-      }),
-    })
+    if (Array.isArray(games)) {
+      rounds.push({
+        name: roundName,
+        games: games.map((game: any) => parseGame(game)).filter((g: any) => g !== null),
+      })
+    }
   })
 
   return rounds
+}
+
+function parseGame(game: any) {
+  try {
+    const competition = game?.competitions?.[0]
+    if (!competition) return null
+
+    const homeComp = competition.competitors?.find((c: any) => c.homeAway === 'home')
+    const awayComp = competition.competitors?.find((c: any) => c.homeAway === 'away')
+    
+    const regionMatch = competition.notes?.[0]?.headline?.match(/(\w+) Region/)
+    const region = regionMatch ? regionMatch[1] : ''
+
+    return {
+      id: competition?.id || '',
+      round: 1,
+      region,
+      homeTeam: homeComp ? {
+        id: homeComp.team?.id || '',
+        name: homeComp.team?.displayName || '',
+        seed: parseInt(homeComp.seed?.value || '0'),
+        logo: homeComp.team?.logo,
+      } : null,
+      awayTeam: awayComp ? {
+        id: awayComp.team?.id || '',
+        name: awayComp.team?.displayName || '',
+        seed: parseInt(awayComp.seed?.value || '0'),
+        logo: awayComp.team?.logo,
+      } : null,
+      winner: competition?.status?.type?.completed 
+        ? (parseInt(homeComp?.score || '0') > parseInt(awayComp?.score || '0') 
+            ? homeComp?.team?.id 
+            : awayComp?.team?.id)
+        : undefined,
+      game: {
+        id: competition?.id || '',
+        status: getGameStatus(competition?.status?.type?.state),
+        score: competition?.status?.type?.completed ? {
+          home: parseInt(homeComp?.score || '0'),
+          away: parseInt(awayComp?.score || '0'),
+        } : undefined,
+        tipoff: competition?.date || '',
+      },
+    }
+  } catch (error) {
+    console.error('Error parsing game:', error)
+    return null
+  }
 }
 
 function getGameStatus(state: string): 'scheduled' | 'live' | 'final' {
