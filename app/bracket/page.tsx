@@ -53,43 +53,47 @@ export default function BracketPage() {
         </header>
 
         {/* 赛区筛选 */}
-        <div className="mb-6 flex flex-wrap gap-2">
-          <button
-            onClick={() => setSelectedRegion('all')}
-            className={`px-4 py-2 rounded font-medium transition ${
-              selectedRegion === 'all'
-                ? 'bg-white text-ncaa-blue'
-                : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            全部
-          </button>
-          {bracket?.regions.map((region) => (
+        {bracket?.regions && bracket.regions.length > 0 && (
+          <div className="mb-6 flex flex-wrap gap-2">
             <button
-              key={region.id}
-              onClick={() => setSelectedRegion(region.name)}
+              onClick={() => setSelectedRegion('all')}
               className={`px-4 py-2 rounded font-medium transition ${
-                selectedRegion === region.name
+                selectedRegion === 'all'
                   ? 'bg-white text-ncaa-blue'
                   : 'bg-white/10 text-white hover:bg-white/20'
               }`}
             >
-              {region.name}
+              全部
             </button>
-          ))}
-        </div>
+            {bracket.regions.map((region) => (
+              <button
+                key={region.id}
+                onClick={() => setSelectedRegion(region.name)}
+                className={`px-4 py-2 rounded font-medium transition ${
+                  selectedRegion === region.name
+                    ? 'bg-white text-ncaa-blue'
+                    : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                {region.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 轮次展示 */}
         {bracket?.rounds && bracket.rounds.length > 0 ? (
           <div className="space-y-8">
-            {bracket.rounds.map((round, roundIndex) => (
-              <RoundSection 
-                key={round.name} 
-                round={round} 
-                roundIndex={roundIndex}
-                selectedRegion={selectedRegion}
-              />
-            ))}
+            {bracket.rounds
+              .filter(round => round.games && round.games.length > 0)
+              .map((round, roundIndex) => (
+                <RoundSection 
+                  key={round.name} 
+                  round={round} 
+                  roundIndex={roundIndex}
+                  selectedRegion={selectedRegion}
+                />
+              ))}
           </div>
         ) : (
           <div className="bg-white/10 backdrop-blur rounded-lg p-8 text-center">
